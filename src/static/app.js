@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.replaceChildren(activitySelect.options[0]);
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -24,8 +25,66 @@ document.addEventListener("DOMContentLoaded", () => {
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <p class="availability"><strong>Availability:</strong> ${spotsLeft} spots left</p>
         `;
+
+        const participantsSection = document.createElement("div");
+        participantsSection.className = "participants";
+
+        const participantsHeading = document.createElement("h5");
+        participantsHeading.textContent = `Participants (${details.participants.length})`;
+        participantsSection.appendChild(participantsHeading);
+
+        const participantsList = document.createElement("ul");
+        details.participants.forEach((email) => {
+          const participant = document.createElement("li");
+          const participantEmail = document.createElement("span");
+          participantEmail.className = "participant-email";
+          participantEmail.textContent = email;
+
+          const removeButton = document.createElement("button");
+          removeButton.className = "remove-participant";
+          removeButton.type = "button";
+          removeButton.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+          </svg>`;
+          removeButton.setAttribute("aria-label", `Remove ${email} from ${name}`);
+          removeButton.title = "Remove participant";
+          removeButton.addEventListener("click", async () => {
+            removeButton.disabled = true;
+
+            try {
+              const response = await fetch(
+                `/activities/${encodeURIComponent(name)}/signup?email=${encodeURIComponent(email)}`,
+                { method: "DELETE" }
+              );
+              const result = await response.json();
+
+              if (!response.ok) {
+                throw new Error(result.detail || "Unable to remove participant");
+              }
+
+              const participantIndex = details.participants.indexOf(email);
+              if (participantIndex !== -1) {
+                details.participants.splice(participantIndex, 1);
+              }
+              participant.remove();
+              participantsHeading.textContent = `Participants (${details.participants.length})`;
+              activityCard.querySelector(".availability").innerHTML =
+                `<strong>Availability:</strong> ${details.max_participants - details.participants.length} spots left`;
+            } catch (error) {
+              messageDiv.textContent = error.message || "Failed to remove participant. Please try again.";
+              messageDiv.className = "error";
+              messageDiv.classList.remove("hidden");
+              removeButton.disabled = false;
+            }
+          });
+
+          participant.append(participantEmail, removeButton);
+          participantsList.appendChild(participant);
+        });
+        participantsSection.appendChild(participantsList);
+        activityCard.appendChild(participantsSection);
 
         activitiesList.appendChild(activityCard);
 
@@ -62,6 +121,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
